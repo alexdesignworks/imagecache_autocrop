@@ -2,10 +2,13 @@
 
 /**
  * @file
- * Crop image based on selected color.
+ * Find edges and crop image.
  *
- * This mini-module contributed by Alex Skrypnyk (alex.designworks@gmail.com)
+ * @author Alex Skrypnyk (alex.designworks@gmail.com)
  *
+ */
+/**
+ * Implements hook_image_effect_info().
  */
 function imagecache_autocrop_image_effect_info() {
   $effects = array();
@@ -25,65 +28,131 @@ function imagecache_autocrop_image_effect_info() {
  */
 function imagecache_autocrop_form($action) {
   $defaults = array(
-    'color' => '#ffffff',
-    'threshold' => '5',
+    'tolerance' => '5',
   );
 
   $action = array_merge($defaults, (array) $action);
 
   $form = array();
-  $form['color'] = array(
+  $form['tolerance'] = array(
     '#type' => 'textfield',
-    '#title' => t('Color'),
-    '#default_value' => $action['color'],
-    '#size' => 7,
-  );
-  $form['threshold'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Threshold'),
-    '#default_value' => $action['threshold'],
+    '#title' => t('Tolerance'),
+    '#default_value' => $action['tolerance'],
     '#size' => 5,
+    '#required' => TRUE,
+    '#description' => t('Acceptable deviation from color. Values are from 0(black) to 255(white).'),
+    '#element_validate' => array('imagecache_autocrop_tolerance_validate'),
   );
   return $form;
 }
 
 /**
+ * Form element validation.
+ */
+function imagecache_autocrop_tolerance_validate($element, &$form_state, $form) {
+  if (!is_numeric($element['#value']) || (int) $element['#value'] < 0 || $element['#value'] > 255) {
+    form_error($element, t('The value should be a number between 0 and 255.'));
+  }
+}
+
+/**
  * Image processing callback.
+ * @param stdObject $image
+ *   Image object.
+ * @param $data
+ *   Values from the settings form.
  */
 function imagecache_autocrop_image(&$image, $data) {
-  // Process data from settings
+  // Get image resource.
+  if (image_gd_load($image)) {
+    $dimentions = _image_autocrop_get_edges($image->resource, $data['tolerance']);
+    $data = array(
+      'width' => $dimentions['right'] - $dimentions['left'],
+      'height' => $dimentions['bottom'] - $dimentions['top'],
+      'anchor' => $dimentions['left'] . '-' . $dimentions['top'],
+    );
 
-  // Process image with settings
-  image_autocrop_process($image, $data['color'], $data['threshold']);
-
-  return TRUE;
+    // If the tolerance value was too big and whole image was cropped out,
+    // just return.
+    if ($data['width'] <= 0 || $data['height'] <= 0) {
+      return;
+    }
+    // Apply crop based on dimentions.
+    image_crop_effect($image, $data);
+  }
 }
 
+/**
+ * Get edges of wanted pixels for an image.
+ * @author: justin@hoog.com.au
+ * @see http://www.php.net/manual/en/function.imagecolorat.php#107970
+ * Slight addiotions were made by alex.designworks@gmail.com to comply Drupal
+ * standards.
+ *
+ * @param $image_res
+ *   Image resource.
+ * @param $tolerance
+ *   Acceptable range +- from colour. 0-255. Defaults to 5.
+ * @param $color
+ *   Color to be 'trimmed'.  Allowable range 0 (black) to 255 (white).  If null
+ *   (or outside 0 - 255) will use top/left corner color as default.
+ * @return
+ *   Associative array of wanted pixels (top, right, bottom, left)
+ */
+function _image_autocrop_get_edges($img_res, $tolerance = 5, $color = NULL) {
+  // If trim colour ($c) isn't a number between 0 - 255.
+  if (!is_numeric($color) || $color < 0 || $color > 255) {
+    // Grab the colour from the top left corner and use that as default.
+    // 2 pixels in to avoid messy edges.
+    $rgb = imagecolorat($img_res, 2, 2);
+    $r = ($rgb >> 16) & 0xFF;
+    $g = ($rgb >> 8) & 0xFF;
+    $b = $rgb & 0xFF;
+    // Average of rgb is good enough for a default.
+    $color = round(($r + $g + $b) / 3);
+  }
+  // If tolerance ($t) isn't a number between 0 - 255 use 10 as default.
+  if (!is_numeric($tolerance) || $tolerance < 0 || $tolerance > 255)
+    $tolerance = 10;
 
-function image_autocrop_process (&$image, $color, $threshold){
-//FIXME HERE.
-  //module_load_include('php', 'imagecache_autocrop','autocrop');
-  //$imgObj = image_load($src);
+  $w = imagesx($img_res);
+  $h = imagesy($img_res);
+  $y_axis = array();
+  $x_axis = array();
+  for ($x = 0; $x < $w; $x++) {
+    for ($y = 0; $y < $h; $y++) {
+      $rgb = imagecolorat($img_res, $x, $y);
+      $r = ($rgb >> 16) & 0xFF;
+      $g = ($rgb >> 8) & 0xFF;
+      $b = $rgb & 0xFF;
+      if (
+          ($r < $color - $tolerance || $r > $color + $tolerance) &&
+          ($g < $color - $tolerance || $g > $color + $tolerance) &&
+          ($b < $color - $tolerance || $b > $color + $tolerance)
+      ) {
+        // Using x and y as keys condenses all rows and all columns
+        // into just one X array and one Y array.
+        // However, the keys are treated as literal and therefore are not in
+        // numeric order, so we need to sort them in order to get the first
+        // and last X and Y occurances of wanted pixels.
+        // Normal sorting will remove keys so we also use x and y as values,
+        // this way they are still available without preserving keys.
+        $y_axis[$y] = $y;
+        $x_axis[$x] = $x;
+        // Note: $y_axis[] = $y; and $x_axis[] = $x; works just as well
+        // but results in much much larger arrays than is necessary
+        // array_unique would reduce size again but this method is quicker.
+      }
+    }
+  }
+  // Sort them so first and last occurances are at start and end.
+  sort($y_axis);
+  sort($x_axis);
 
-  //dpm($imgObj);
-  //@FIXME here
-  //$res = new AutoCrop($src, $dst);
-// FIX ME: empty image
-
-  image_crop_effect($image, array('width'=>100, 'height'=>100));
-
-}
-
-function compareColors ($col1, $col2, $tolerance=35) {
-    $col1Rgb = array(
-        "r" => hexdec(substr($col1, 0, 2)),
-        "g" => hexdec(substr($col1, 2, 2)),
-        "b" => hexdec(substr($col1, 4, 2))
-    );
-    $col2Rgb = array(
-        "r" => hexdec(substr($col2, 0, 2)),
-        "g" => hexdec(substr($col2, 2, 2)),
-        "b" => hexdec(substr($col2, 4, 2))
-    );
-    return ($col1Rgb['r'] >= $col2Rgb['r'] - $tolerance && $col1Rgb['r'] <= $col2Rgb['r'] + $tolerance) && ($col1Rgb['g'] >= $col2Rgb['g'] - $tolerance && $col1Rgb['g'] <= $col2Rgb['g'] + $tolerance) && ($col1Rgb['b'] >= $col2Rgb['b'] - $tolerance && $col1Rgb['b'] <= $col2Rgb['b'] + $tolerance);
+  return array(
+    'top' => array_shift($y_axis),
+    'right' => array_pop($x_axis),
+    'bottom' => array_pop($y_axis),
+    'left' => array_shift($x_axis),
+  );
 }
