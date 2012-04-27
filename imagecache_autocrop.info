@@ -1,0 +1,9 @@
+name = Imagecache autocrop
+description = Crop image based on selected color.
+package = Media
+core = 7.x
+
+dependencies[] = image
+
+files[] = imagecache_autocrop.install
+files[] = imagecache_autocrop.module

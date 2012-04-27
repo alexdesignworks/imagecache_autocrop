@@ -1,0 +1,89 @@
+<?php
+
+/**
+ * @file
+ * Crop image based on selected color.
+ *
+ * This mini-module contributed by Alex Skrypnyk (alex.designworks@gmail.com)
+ *
+ */
+function imagecache_autocrop_image_effect_info() {
+  $effects = array();
+
+  $effects['imagecache_autocrop'] = array(
+    'label' => t('Autocrop'),
+    'help' => t('Crop image based on selected color.'),
+    'effect callback' => 'imagecache_autocrop_image',
+    'form callback' => 'imagecache_autocrop_form',
+  );
+
+  return $effects;
+}
+
+/**
+ * Settings form callback.
+ */
+function imagecache_autocrop_form($action) {
+  $defaults = array(
+    'color' => '#ffffff',
+    'threshold' => '5',
+  );
+
+  $action = array_merge($defaults, (array) $action);
+
+  $form = array();
+  $form['color'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Color'),
+    '#default_value' => $action['color'],
+    '#size' => 7,
+  );
+  $form['threshold'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Threshold'),
+    '#default_value' => $action['threshold'],
+    '#size' => 5,
+  );
+  return $form;
+}
+
+/**
+ * Image processing callback.
+ */
+function imagecache_autocrop_image(&$image, $data) {
+  // Process data from settings
+
+  // Process image with settings
+  image_autocrop_process($image, $data['color'], $data['threshold']);
+
+  return TRUE;
+}
+
+
+function image_autocrop_process (&$image, $color, $threshold){
+//FIXME HERE.
+  //module_load_include('php', 'imagecache_autocrop','autocrop');
+  //$imgObj = image_load($src);
+
+  //dpm($imgObj);
+  //@FIXME here
+  //$res = new AutoCrop($src, $dst);
+// FIX ME: empty image
+
+  image_crop_effect($image, array('width'=>100, 'height'=>100));
+
+}
+
+function compareColors ($col1, $col2, $tolerance=35) {
+    $col1Rgb = array(
+        "r" => hexdec(substr($col1, 0, 2)),
+        "g" => hexdec(substr($col1, 2, 2)),
+        "b" => hexdec(substr($col1, 4, 2))
+    );
+    $col2Rgb = array(
+        "r" => hexdec(substr($col2, 0, 2)),
+        "g" => hexdec(substr($col2, 2, 2)),
+        "b" => hexdec(substr($col2, 4, 2))
+    );
+    return ($col1Rgb['r'] >= $col2Rgb['r'] - $tolerance && $col1Rgb['r'] <= $col2Rgb['r'] + $tolerance) && ($col1Rgb['g'] >= $col2Rgb['g'] - $tolerance && $col1Rgb['g'] <= $col2Rgb['g'] + $tolerance) && ($col1Rgb['b'] >= $col2Rgb['b'] - $tolerance && $col1Rgb['b'] <= $col2Rgb['b'] + $tolerance);
+}
