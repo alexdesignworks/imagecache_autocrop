@@ -8,7 +8,7 @@
  *
  */
 /**
- * Implements hook_image_effect_info().
+ * Implements hook_image_effect_info()
  */
 function imagecache_autocrop_image_effect_info() {
   $effects = array();
@@ -29,6 +29,7 @@ function imagecache_autocrop_image_effect_info() {
 function imagecache_autocrop_form($action) {
   $defaults = array(
     'tolerance' => '5',
+    'grid' => '1',
   );
 
   $action = array_merge($defaults, (array) $action);
@@ -40,8 +41,17 @@ function imagecache_autocrop_form($action) {
     '#default_value' => $action['tolerance'],
     '#size' => 5,
     '#required' => TRUE,
-    '#description' => t('Acceptable deviation from color. Values are from 0(black) to 255(white).'),
+    '#description' => t('Acceptable deviation from background color. Values are from 0 (black) to 255 (white).'),
     '#element_validate' => array('imagecache_autocrop_tolerance_validate'),
+  );
+  $form['grid'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Grid size'),
+    '#default_value' => $action['grid'],
+    '#size' => 5,
+    '#required' => TRUE,
+    '#description' => t('Pixel grid size, from 1 to 32. Values higher than 1 are n<sup>2</sup> times faster, but may miss fine detail and will not crop as tight.'),
+    '#element_validate' => array('imagecache_autocrop_grid_validate'),
   );
   return $form;
 }
@@ -56,6 +66,15 @@ function imagecache_autocrop_tolerance_validate($element, &$form_state, $form) {
 }
 
 /**
+ * Form element validation.
+ */
+function imagecache_autocrop_grid_validate($element, &$form_state, $form) {
+  if (!is_numeric($element['#value']) || (int) $element['#value'] < 1 || $element['#value'] > 32) {
+    form_error($element, t('The value should be a number between 1 and 32.'));
+  }
+}
+
+/**
  * Image processing callback.
  * @param stdObject $image
  *   Image object.
@@ -65,11 +84,11 @@ function imagecache_autocrop_tolerance_validate($element, &$form_state, $form) {
 function imagecache_autocrop_image(&$image, $data) {
   // Get image resource.
   if (image_gd_load($image)) {
-    $dimentions = _image_autocrop_get_edges($image->resource, $data['tolerance']);
+    $dimensions = _image_autocrop_get_edges($image->resource, $data['tolerance'], $data['grid']);
     $data = array(
-      'width' => $dimentions['right'] - $dimentions['left'],
-      'height' => $dimentions['bottom'] - $dimentions['top'],
-      'anchor' => $dimentions['left'] . '-' . $dimentions['top'],
+      'width' => $dimensions['right'] - $dimensions['left'],
+      'height' => $dimensions['bottom'] - $dimensions['top'],
+      'anchor' => $dimensions['left'] . '-' . $dimensions['top'],
     );
 
     // If the tolerance value was too big and whole image was cropped out,
@@ -86,20 +105,22 @@ function imagecache_autocrop_image(&$image, $data) {
  * Get edges of wanted pixels for an image.
  * @author: justin@hoog.com.au
  * @see http://www.php.net/manual/en/function.imagecolorat.php#107970
- * Slight addiotions were made by alex.designworks@gmail.com to comply Drupal
+ * Slight additions were made by alex.designworks@gmail.com to comply with Drupal
  * standards.
  *
  * @param $image_res
  *   Image resource.
  * @param $tolerance
  *   Acceptable range +- from colour. 0-255. Defaults to 5.
+ * @param $grid
+ *   Pixel grid processing size. 1-32. Defaults to 1.
  * @param $color
  *   Color to be 'trimmed'.  Allowable range 0 (black) to 255 (white).  If null
  *   (or outside 0 - 255) will use top/left corner color as default.
  * @return
  *   Associative array of wanted pixels (top, right, bottom, left)
  */
-function _image_autocrop_get_edges($img_res, $tolerance = 5, $color = NULL) {
+function _image_autocrop_get_edges($img_res, $tolerance = 5, $grid = 1, $color = NULL) {
   // If trim colour ($c) isn't a number between 0 - 255.
   if (!is_numeric($color) || $color < 0 || $color > 255) {
     // Grab the colour from the top left corner and use that as default.
@@ -111,24 +132,34 @@ function _image_autocrop_get_edges($img_res, $tolerance = 5, $color = NULL) {
     // Average of rgb is good enough for a default.
     $color = round(($r + $g + $b) / 3);
   }
-  // If tolerance ($t) isn't a number between 0 - 255 use 10 as default.
-  if (!is_numeric($tolerance) || $tolerance < 0 || $tolerance > 255)
+  // If tolerance isn't a number between 0 - 255 use 10 as default.
+  if (!is_numeric($tolerance) || $tolerance < 0 || $tolerance > 255) {
     $tolerance = 10;
+  }
+  // If grid isn't a number between 1 - 32 use 1 as default.
+  if (!is_numeric($grid) || $grid < 1 || $grid > 32) {
+    $grid = 1;
+  }
+
+  // Calculate these outside the loop.
+  $min = $color - $tolerance;
+  $max = $color + $tolerance;
 
   $w = imagesx($img_res);
   $h = imagesy($img_res);
+
   $y_axis = array();
   $x_axis = array();
-  for ($x = 0; $x < $w; $x++) {
-    for ($y = 0; $y < $h; $y++) {
+  for ($x = 0; $x < $w; $x = $x + $grid) {
+    for ($y = 0; $y < $h; $y = $y + $grid) {
       $rgb = imagecolorat($img_res, $x, $y);
       $r = ($rgb >> 16) & 0xFF;
       $g = ($rgb >> 8) & 0xFF;
       $b = $rgb & 0xFF;
       if (
-          ($r < $color - $tolerance || $r > $color + $tolerance) &&
-          ($g < $color - $tolerance || $g > $color + $tolerance) &&
-          ($b < $color - $tolerance || $b > $color + $tolerance)
+          ($r < $min || $r > $max) &&
+          ($g < $min || $g > $max) &&
+          ($b < $min || $b > $max)
       ) {
         // Using x and y as keys condenses all rows and all columns
         // into just one X array and one Y array.
@@ -149,10 +180,18 @@ function _image_autocrop_get_edges($img_res, $tolerance = 5, $color = NULL) {
   sort($y_axis);
   sort($x_axis);
 
+  // Find crop bounds and add a margin to allow for the grid size.
+  $margin = $grid - 1;
+  $top = array_shift($y_axis) - $margin;
+  $right = array_pop($x_axis) + $margin;
+  $bottom = array_pop($y_axis) + $margin;
+  $left = array_shift($x_axis) - $margin;
+
+  // Check crop bounds are not outside the image dimensions.
   return array(
-    'top' => array_shift($y_axis),
-    'right' => array_pop($x_axis),
-    'bottom' => array_pop($y_axis),
-    'left' => array_shift($x_axis),
+    'top' => $top < 0 ? 0 : $top,
+    'right' => $right > $w ? $w : $right,
+    'bottom' => $bottom > $h ? $h : $bottom,
+    'left' => $left < 0 ? 0 : $left,
   );
 }
