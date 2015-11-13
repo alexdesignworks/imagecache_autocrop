@@ -3,12 +3,10 @@
 /**
  * @file
  * Find edges and crop image.
- *
- * @author Alex Skrypnyk (alex.designworks@gmail.com)
- *
  */
+
 /**
- * Implements hook_image_effect_info()
+ * Implements hook_image_effect_info().
  */
 function imagecache_autocrop_image_effect_info() {
   $effects = array();
@@ -27,6 +25,8 @@ function imagecache_autocrop_image_effect_info() {
  * Settings form callback.
  */
 function imagecache_autocrop_form($action) {
+  $form = array();
+
   $defaults = array(
     'tolerance' => '5',
     'grid' => '1',
@@ -34,7 +34,6 @@ function imagecache_autocrop_form($action) {
 
   $action = array_merge($defaults, (array) $action);
 
-  $form = array();
   $form['tolerance'] = array(
     '#type' => 'textfield',
     '#title' => t('Tolerance'),
@@ -53,11 +52,12 @@ function imagecache_autocrop_form($action) {
     '#description' => t('Pixel grid size, from 1 to 32. Values higher than 1 are n<sup>2</sup> times faster, but may miss fine detail and will not crop as tight.'),
     '#element_validate' => array('imagecache_autocrop_grid_validate'),
   );
+
   return $form;
 }
 
 /**
- * Form element validation.
+ * Validation callback for tolerance value.
  */
 function imagecache_autocrop_tolerance_validate($element, &$form_state, $form) {
   if (!is_numeric($element['#value']) || (int) $element['#value'] < 0 || $element['#value'] > 255) {
@@ -66,7 +66,7 @@ function imagecache_autocrop_tolerance_validate($element, &$form_state, $form) {
 }
 
 /**
- * Form element validation.
+ * Validation callback for grid value.
  */
 function imagecache_autocrop_grid_validate($element, &$form_state, $form) {
   if (!is_numeric($element['#value']) || (int) $element['#value'] < 1 || $element['#value'] > 32) {
@@ -76,9 +76,10 @@ function imagecache_autocrop_grid_validate($element, &$form_state, $form) {
 
 /**
  * Image processing callback.
- * @param stdObject $image
+ *
+ * @param object $image
  *   Image object.
- * @param $data
+ * @param array $data
  *   Values from the settings form.
  */
 function imagecache_autocrop_image(&$image, $data) {
@@ -91,81 +92,79 @@ function imagecache_autocrop_image(&$image, $data) {
       'anchor' => $dimensions['left'] . '-' . $dimensions['top'],
     );
 
-    // If the tolerance value was too big and whole image was cropped out,
-    // just return.
-    if ($data['width'] <= 0 || $data['height'] <= 0) {
-      return;
+    // Apply crop based on dimensions, but only if the tolerance value was not
+    // too large and the whole image was cropped out.
+    if ($data['width'] > 0 && $data['height'] > 0) {
+      image_crop_effect($image, $data);
     }
-    // Apply crop based on dimentions.
-    image_crop_effect($image, $data);
   }
 }
 
 /**
  * Get edges of wanted pixels for an image.
- * @author: justin@hoog.com.au
- * @see http://www.php.net/manual/en/function.imagecolorat.php#107970
- * Slight additions were made by alex.designworks@gmail.com to comply with Drupal
- * standards.
  *
- * @param $image_res
+ * @param resource $image_resource
  *   Image resource.
- * @param $tolerance
+ * @param int $tolerance
  *   Acceptable range +- from colour. 0-255. Defaults to 5.
- * @param $grid
+ * @param int $grid
  *   Pixel grid processing size. 1-32. Defaults to 1.
- * @param $color
+ * @param int $color
  *   Color to be 'trimmed'.  Allowable range 0 (black) to 255 (white).  If null
  *   (or outside 0 - 255) will use top/left corner color as default.
- * @return
+ *
+ * @return array
  *   Associative array of wanted pixels (top, right, bottom, left)
+ *
+ * @see http://www.php.net/manual/en/function.imagecolorat.php#107970
  */
-function _image_autocrop_get_edges($img_res, $tolerance = 5, $grid = 1, $color = NULL) {
+function _image_autocrop_get_edges($image_resource, $tolerance = 5, $grid = 1, $color = NULL) {
   // If trim colour ($c) isn't a number between 0 - 255.
   if (!is_numeric($color) || $color < 0 || $color > 255) {
     // Grab the colour from the top left corner and use that as default.
     // 2 pixels in to avoid messy edges.
-    $rgb = imagecolorat($img_res, 2, 2);
+    $rgb = imagecolorat($image_resource, 2, 2);
     $r = ($rgb >> 16) & 0xFF;
     $g = ($rgb >> 8) & 0xFF;
     $b = $rgb & 0xFF;
     // Average of rgb is good enough for a default.
     $color = round(($r + $g + $b) / 3);
   }
+
   // If tolerance isn't a number between 0 - 255 use 10 as default.
   if (!is_numeric($tolerance) || $tolerance < 0 || $tolerance > 255) {
     $tolerance = 10;
   }
+
   // If grid isn't a number between 1 - 32 use 1 as default.
   if (!is_numeric($grid) || $grid < 1 || $grid > 32) {
     $grid = 1;
   }
 
-  // Calculate these outside the loop.
   $min = $color - $tolerance;
   $max = $color + $tolerance;
 
-  $w = imagesx($img_res);
-  $h = imagesy($img_res);
+  $w = imagesx($image_resource);
+  $h = imagesy($image_resource);
 
   $y_axis = array();
   $x_axis = array();
   for ($x = 0; $x < $w; $x = $x + $grid) {
     for ($y = 0; $y < $h; $y = $y + $grid) {
-      $rgb = imagecolorat($img_res, $x, $y);
+      $rgb = imagecolorat($image_resource, $x, $y);
       $r = ($rgb >> 16) & 0xFF;
       $g = ($rgb >> 8) & 0xFF;
       $b = $rgb & 0xFF;
       if (
-          ($r < $min || $r > $max) &&
-          ($g < $min || $g > $max) &&
-          ($b < $min || $b > $max)
+        ($r < $min || $r > $max) &&
+        ($g < $min || $g > $max) &&
+        ($b < $min || $b > $max)
       ) {
         // Using x and y as keys condenses all rows and all columns
         // into just one X array and one Y array.
         // However, the keys are treated as literal and therefore are not in
         // numeric order, so we need to sort them in order to get the first
-        // and last X and Y occurances of wanted pixels.
+        // and last X and Y occurrences of wanted pixels.
         // Normal sorting will remove keys so we also use x and y as values,
         // this way they are still available without preserving keys.
         $y_axis[$y] = $y;
@@ -176,7 +175,7 @@ function _image_autocrop_get_edges($img_res, $tolerance = 5, $grid = 1, $color =
       }
     }
   }
-  // Sort them so first and last occurances are at start and end.
+  // Sort them so first and last occurrences are at start and end.
   sort($y_axis);
   sort($x_axis);
 

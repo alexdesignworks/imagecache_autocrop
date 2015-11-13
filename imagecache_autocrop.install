@@ -2,8 +2,9 @@
 
 /**
  * @file
- * Ensure Imagecache recognises our new actions, per http://drupal.org/node/290101.
+ * Install file for imagecache_autocrop.
  */
+
 /**
  * Implements hook_enable().
  */
