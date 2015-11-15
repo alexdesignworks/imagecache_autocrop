@@ -28,8 +28,8 @@ function imagecache_autocrop_form($action) {
   $form = array();
 
   $defaults = array(
-    'tolerance' => '5',
-    'grid' => '1',
+    'tolerance' => 5,
+    'grid' => 1,
   );
 
   $action = array_merge($defaults, (array) $action);
@@ -43,11 +43,12 @@ function imagecache_autocrop_form($action) {
     '#description' => t('Acceptable deviation from background color. Values are from 0 (black) to 255 (white).'),
     '#element_validate' => array('imagecache_autocrop_tolerance_validate'),
   );
+
   $form['grid'] = array(
-    '#type' => 'textfield',
+    '#type' => 'select',
     '#title' => t('Grid size'),
     '#default_value' => $action['grid'],
-    '#size' => 5,
+    '#options' => array_combine(range(1, 32), range(1, 32)),
     '#required' => TRUE,
     '#description' => t('Pixel grid size, from 1 to 32. Values higher than 1 are n<sup>2</sup> times faster, but may miss fine detail and will not crop as tight.'),
     '#element_validate' => array('imagecache_autocrop_grid_validate'),
