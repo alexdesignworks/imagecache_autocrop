@@ -183,6 +183,12 @@ class ImagecacheAutocropWebTestCase extends DrupalWebTestCase {
 
     $style_dir = $styles_base . $style_name;
 
-    return file_prepare_directory($style_dir, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
+    $prepared = file_prepare_directory($style_dir, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
+
+    if (!$prepared) {
+      $this->fail('Unable to prepare style dir ' . $style_dir);
+    }
+
+    return $prepared;
   }
 }
