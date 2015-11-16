@@ -47,6 +47,7 @@ class ImagecacheAutocropWebTestCase extends DrupalWebTestCase {
     $effect = 'imagecache_autocrop';
     $style_name = strtolower($this->randomName(10));
     $style_label = $this->randomString();
+    $this->prepareStyleDir($style_name);
 
     // Create new style.
     $edit = array(
@@ -175,5 +176,13 @@ class ImagecacheAutocropWebTestCase extends DrupalWebTestCase {
       }
       $seen_ids[] = $dblog->wid;
     }
+  }
+
+  protected function prepareStyleDir($style_name) {
+    $styles_base = file_default_scheme() . '://styles/';
+
+    $style_dir = $styles_base . $style_name;
+
+    return file_prepare_directory($style_dir, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
   }
 }
