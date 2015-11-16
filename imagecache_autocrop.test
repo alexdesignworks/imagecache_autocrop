@@ -79,6 +79,7 @@ class ImagecacheAutocropWebTestCase extends DrupalWebTestCase {
     $modified_width = $this->getPreviewImageDimension('modified-image', 'width');
     $modified_height = $this->getPreviewImageDimension('modified-image', 'height');
     $this->assertTrue($original_width != $modified_width || $original_height != $modified_height, 'Effect has modified result image');
+    $this->assertWatchdogMessages();
   }
 
   /**
@@ -126,4 +127,53 @@ class ImagecacheAutocropWebTestCase extends DrupalWebTestCase {
     return FALSE;
   }
 
+  protected function assertWatchdogMessages($pass_expected = TRUE, $type = NULL) {
+    static $seen_ids = array(), $table_exists;
+
+    // @todo Implement hook_watchdog() to perform independent logging.
+    if (!isset($table_exists)) {
+      $table_exists = db_table_exists('watchdog');
+    }
+
+    if (!$table_exists) {
+      return;
+    }
+
+    $query = db_select('watchdog', 'w')
+      ->fields('w')
+      ->orderBy('timestamp');
+
+    if (isset($type)) {
+      $query->condition('w.type', $type);
+    }
+
+    if (!empty($seen_ids)) {
+      $query->condition('w.wid', $seen_ids, 'NOT IN');
+    }
+
+    foreach ($query->execute() as $dblog) {
+      // @see _dblog_format_message()
+      // Legacy messages and user specified text.
+      if ($dblog->variables === 'N;') {
+        $message = $dblog->message;
+      }
+      // Message to translate with injected variables.
+      else {
+        $message = t($dblog->message, unserialize($dblog->variables));
+      }
+      if ($pass_expected ? $dblog->severity >= WATCHDOG_NOTICE : $dblog->severity < WATCHDOG_NOTICE) {
+        $this->pass(t('%type: !message', array(
+          '%type' => $dblog->type,
+          '!message' => $message
+        )), t('Watchdog'));
+      }
+      else {
+        $this->fail(t('%type: !message', array(
+          '%type' => $dblog->type,
+          '!message' => $message
+        )), t('Watchdog'));
+      }
+      $seen_ids[] = $dblog->wid;
+    }
+  }
 }
