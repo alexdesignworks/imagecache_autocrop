@@ -5,10 +5,10 @@ machine:
   php:
     version: 5.5.0
   environment:
-    # Module name to test. Change to your module name.
+    # Module name to test.
     MODULE_NAME: "imagecache_autocrop"
-    # Module's tests to run: test group or class name. Change for your module.
-    MODULE_TESTS: ""
+    # Module's tests to run: test group or class name.
+    MODULE_TESTS: "Imagecache autocrop"
     #
     # Other variables for build configuration. Not needed to be changed.
     #

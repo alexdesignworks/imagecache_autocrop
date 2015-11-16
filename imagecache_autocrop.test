@@ -1,0 +1,129 @@
+<?php
+
+/**
+ * @file
+ * Test for imagecache_autocrop module.
+ */
+
+/**
+ * Class ImagecacheAutocropWebTestCase.
+ */
+class ImagecacheAutocropWebTestCase extends DrupalWebTestCase {
+  /**
+   * Admin user to login with.
+   *
+   * @var object
+   */
+  protected $adminUser;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Imagecache autocrop',
+      'description' => 'Tests imagecache_autocrop functionality.',
+      'group' => 'Imagecache autocrop',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp() {
+    parent::setUp('image', 'imagecache_autocrop');
+    $this->adminUser = $this->drupalCreateUser(array(
+      'access administration pages',
+      'administer site configuration',
+      'administer image styles',
+    ));
+    $this->drupalLogin($this->adminUser);
+  }
+
+  /**
+   * Test effect presence, settings and functionality.
+   */
+  public function testEffect() {
+    $effect = 'imagecache_autocrop';
+    $style_name = strtolower($this->randomName(10));
+    $style_label = $this->randomString();
+
+    // Create new style.
+    $edit = array(
+      'name' => $style_name,
+      'label' => $style_label,
+    );
+    $this->drupalPost('admin/config/media/image-styles/add', $edit, t('Create new style'));
+    $this->assertRaw(t('Style %name was created.', array('%name' => $style_label)), 'Image style successfully created.');
+
+    // Check that effect is available on the style form.
+    $this->assertFieldByOption('imagecache_autocrop', 'Autocrop effect is available for selection');
+
+    // Check that effect settings are available on the settings form.
+    $this->drupalPost('admin/config/media/image-styles/edit/' . $style_name, array('new' => $effect), t('Add'));
+    $this->assertFieldByName('data[tolerance]', 5, 'Tolerance field is present on the effect settings form');
+    $this->assertFieldByName('data[grid]', 1, 'Grid size field is present on the effect settings form');
+
+    // Add effect.
+    $edit = array(
+      'data[tolerance]' => 100,
+      'data[grid]' => 2,
+    );
+    $this->drupalPost(NULL, $edit, t('Add effect'));
+
+    // Compare original and preview image sizes to make sure that the effect
+    // works: there should be a visible difference in image size and/or
+    // proportions.
+    $original_width = $this->getPreviewImageDimension('original-image', 'width');
+    $original_height = $this->getPreviewImageDimension('original-image', 'height');
+    $modified_width = $this->getPreviewImageDimension('modified-image', 'width');
+    $modified_height = $this->getPreviewImageDimension('modified-image', 'height');
+    $this->assertTrue($original_width != $modified_width || $original_height != $modified_height, 'Effect has modified result image');
+  }
+
+  /**
+   * Assert select field by option value.
+   *
+   * @param mixed $value
+   *   Option value.
+   * @param string $message
+   *   Assertion message.
+   *
+   * @return bool
+   *   TRUE if assertion passes, FALSE otherwise.
+   */
+  protected function assertFieldByOption($value, $message = '') {
+    $xpath = $this->buildXPathQuery('//option[@value=:value]', array(':value' => $value));
+    $message = $message ? $message : t('Found field by option value @value', array('@value' => $value));
+
+    return $this->assertFieldByXPath($xpath, $value, $message, t('Browser'));
+  }
+
+  /**
+   * Get preview image dimension value.
+   *
+   * @param string $css_class
+   *   CSS class of preview image wrapper.
+   * @param string $attribute_name
+   *   Image attribute name.
+   *
+   * @return mixed
+   *   Attribute value if both element and an attribute exist, FALSE otherwise.
+   */
+  protected function getPreviewImageDimension($css_class, $attribute_name) {
+    $element = $this->xpath('//div[contains(concat(" ", normalize-space(@class), " "), concat(" ", :class, " "))]/a/img', array(
+      ':class' => $css_class,
+    ));
+
+    if (!empty($element)) {
+      foreach ($element[0]->attributes() as $attr_name => $attr_value) {
+        if ($attr_name == $attribute_name) {
+          return $attr_value;
+        }
+      }
+    }
+
+    return FALSE;
+  }
+
+}
