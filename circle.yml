@@ -34,6 +34,19 @@ dependencies:
   pre:
   # Modify user to make sure that there will be no permission issues.
   - sudo usermod -a -G $WEB_GROUP $WEB_USER
+  # Increase PHP memory size for running tests.
+  - echo "memory_limit = 512M" > ~/.phpenv/versions/$(phpenv global)/etc/conf.d/memory.ini
+  - php -i
+  override:
+  # Install drush.
+  - composer global require drush/drush:6.6.0
+  post:
+  # Create $DOCROOT directory and set ownership and permisions.
+  - mkdir -p $DOCROOT
+  - sudo chmod -f 775 $DOCROOT
+  - sudo chown -R $WEB_USER:$WEB_GROUP $DOCROOT
+  - sudo chmod g+s $DOCROOT
+
   # Add apache config.
   - |
     echo "<VirtualHost *:80>
@@ -57,21 +70,9 @@ dependencies:
   - sudo sed -e "s?%SERVER%?$SERVER?g" --in-place /etc/apache2/sites-available/default
   - sudo a2enmod rewrite
   - sudo service apache2 restart
-  # Increase PHP memory size for running tests.
-  - echo "memory_limit = 512M" > ~/.phpenv/versions/$(phpenv global)/etc/conf.d/memory.ini
-  - php -i
-  override:
-  # Install drush.
-  - composer global require drush/drush:6.6.0
-  post:
-  # Create $DOCROOT directory and set ownership and permisions.
-  - mkdir -p $DOCROOT
-  - sudo chmod -f 775 $DOCROOT
-  - sudo chown -R $WEB_USER:$WEB_GROUP $DOCROOT
-  - sudo chmod g+s $DOCROOT
+
   # Create sites/default/files directory and set ownership and permissions.
   - mkdir -p $DOCROOT/sites/default/files
-  - mkdir -p $DOCROOT/sites/default/files/styles
   - sudo chown -R $WEB_USER:$WEB_GROUP $DOCROOT/sites/default/files
   - sudo chmod -R g+s $DOCROOT/sites/default/files
   # Disable sendmail binary to suppress any mailouts.
