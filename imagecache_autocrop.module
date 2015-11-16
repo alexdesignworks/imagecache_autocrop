@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Find edges and crop image.
+ * Image effect to automatically crop images.
  */
 
 /**
