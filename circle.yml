@@ -71,8 +71,9 @@ dependencies:
   - sudo chmod g+s $DOCROOT
   # Create sites/default/files directory and set ownership and permissions.
   - mkdir -p $DOCROOT/sites/default/files
+  - mkdir -p $DOCROOT/sites/default/files/styles
   - sudo chown -R $WEB_USER:$WEB_GROUP $DOCROOT/sites/default/files
-  - sudo chmod g+s $DOCROOT/sites/default/files
+  - sudo chmod -R g+s $DOCROOT/sites/default/files
   # Disable sendmail binary to suppress any mailouts.
   - echo 'sendmail_path = /bin/true' >> ~/.phpenv/versions/$(phpenv version-name)/etc/conf.d/circle.ini
   # Download Drupal.
